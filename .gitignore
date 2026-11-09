@@ -1,0 +1,26 @@
+# build output
+/minicut
+/minicut.exe
+/dist/
+*.syso
+
+# Go
+*.test
+*.out
+vendor/
+
+# editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Python helper (tools/make_icon.py)
+__pycache__/
+
+# local test media
+*.mkv
+*.mka
+*.mp4
+*.mov
