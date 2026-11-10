@@ -24,3 +24,6 @@ __pycache__/
 *.mka
 *.mp4
 *.mov
+
+# installer
+/installer/ffmpeg/

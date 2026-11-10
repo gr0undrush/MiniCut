@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+- **Split**: the clip at the playhead is cut into two clips. Buttons *Split* (next to *Play timeline*) and
+  *Split at playhead*, key `S`. A selected clip is cut if the playhead is inside it, otherwise all clips under the playhead.
+- System file dialogs (Windows / macOS / zenity or kdialog on Linux) for import (multi-select) and *Save as*;
+  the built-in dialogs remain as a fallback.
+- Media library and Export are two cards of the same size (50/50); the export settings use two columns.
+- A copy of ffmpeg next to the executable is preferred over the one in PATH.
+- Windows installer that includes ffmpeg, portable zip, and a GitHub release workflow.
+
 ## 1.0.0
 - Native desktop app (Go + Fyne), ffmpeg does all media work.
 - Media library with Video and Audio folders; import by dialog or by dropping files on the window.

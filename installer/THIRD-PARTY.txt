@@ -1,0 +1,15 @@
+MiniCut third-party components
+==============================
+
+MiniCut itself is MIT licensed (see MiniCut-LICENSE.txt).
+
+FFmpeg (ffmpeg.exe, ffprobe.exe, ffplay.exe)
+  Static Windows build from https://www.gyan.dev/ffmpeg/builds/ (release "essentials").
+  This build is licensed under the GNU General Public License v3 (see FFmpeg-LICENSE.txt).
+  Source code and information: https://ffmpeg.org/download.html#get-sources and
+  https://ffmpeg.org/legal.html . MiniCut starts these programs as separate processes.
+
+Go libraries compiled into minicut.exe
+  Fyne (fyne.io/fyne/v2)        BSD 3-Clause   https://github.com/fyne-io/fyne
+  zenity (ncruces/zenity)       MIT            https://github.com/ncruces/zenity
+  and their dependencies (see go.mod / go.sum for the list and each project's license).

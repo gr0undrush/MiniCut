@@ -68,6 +68,13 @@ Two monitors, same technique:
 
 `playState` tracks one player and uses a generation counter so a finished player cannot reset a newer one.
 
+## File dialogs (`dialogs.go`)
+
+The system dialogs come from [ncruces/zenity](https://github.com/ncruces/zenity) (pure Go: Windows common dialogs,
+macOS `osascript`, `zenity`/`kdialog` on Linux). They block, so they run in a goroutine; if zenity reports anything
+other than "cancelled" the built-in Fyne dialogs are shown instead. `App.savedPath` remembers a path the Save dialog
+already confirmed, so exporting does not ask about overwriting a second time.
+
 ## Child processes (`procutil.go`, `proc_*.go`)
 
 Always start long-running tools with `newCmd`. It hides the console window on Windows and makes cancelling kill the
@@ -91,5 +98,6 @@ the options of each vendor.
 - Built against Fyne 2.5. UI updates from goroutines are allowed in that version; if you upgrade to Fyne 2.6 or
   newer, wrap them in `fyne.Do` / `fyne.DoAndWait`.
 - The preview size is `pvW x pvH` in `player.go`.
+- `lookTool` prefers an ffmpeg next to the executable (the installer relies on it).
 - Ideas: gaps on the video lane (black filler), video/audio linked clips, undo/redo, project save/load,
   transitions, hardware decoding for previews, keyframe-accurate stream-copy export.

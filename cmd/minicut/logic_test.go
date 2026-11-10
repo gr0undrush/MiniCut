@@ -207,3 +207,25 @@ func TestHardwareArgs(t *testing.T) {
 		t.Error("nvenc preset mapping")
 	}
 }
+
+func TestSplit(t *testing.T) {
+	a := &App{
+		vclips: []Clip{testClip(0, 10), testClip(0, 10)},
+		aclips: []Clip{{Path: testPath(), Start: 0, End: 8, Offset: 2, Audio: true}},
+	}
+	if a.splitVideo(0, 10) { // exactly on the join: nothing to split
+		t.Error("splitting on a clip boundary must be refused")
+	}
+	if !a.splitVideo(1, 15) { // second clip spans 10..20 on the timeline
+		t.Fatal("split inside the second clip was refused")
+	}
+	if len(a.vclips) != 3 || a.vclips[1].End != 5 || a.vclips[2].Start != 5 || a.vclips[2].End != 10 {
+		t.Errorf("video clips after split: %+v", a.vclips)
+	}
+	if !a.splitAudio(0, 6) { // audio clip spans 2..10
+		t.Fatal("audio split was refused")
+	}
+	if len(a.aclips) != 2 || a.aclips[0].End != 4 || a.aclips[1].Start != 4 || a.aclips[1].Offset != 6 || a.aclips[1].End != 8 {
+		t.Errorf("audio clips after split: %+v", a.aclips)
+	}
+}

@@ -174,6 +174,8 @@ type App struct {
 	pgmCancel context.CancelFunc
 	pgmSeq    int
 
+	savedPath string // last path chosen in the Save dialog (it already asked about overwriting)
+
 	exporting bool
 	cancel    context.CancelFunc
 
@@ -310,30 +312,6 @@ func (a *App) setDialogDir(d *dialog.FileDialog) {
 }
 
 
-func (a *App) pickSave(cb func(string)) {
-	ext := ".mkv"
-	if a.mode.Selected == "Audio only" {
-		ext = ".mka"
-	}
-	d := dialog.NewFileSave(func(wc fyne.URIWriteCloser, err error) {
-		if err != nil {
-			dialog.ShowError(err, a.win)
-			return
-		}
-		if wc == nil {
-			return
-		}
-		p := uriPath(wc.URI())
-		wc.Close()
-		a.rememberDir(filepath.Dir(p))
-		cb(p)
-	}, a.win)
-	d.SetFileName("output" + ext)
-	d.SetFilter(storage.NewExtensionFileFilter([]string{ext}))
-	a.setDialogDir(d)
-	d.Resize(fyne.NewSize(860, 580))
-	d.Show()
-}
 
 
 func (a *App) onScrub() {
@@ -583,7 +561,7 @@ func (a *App) startExport(out string) {
 		}
 	}
 	// A zero-size file is the empty placeholder the save dialog just created.
-	if st, err := os.Stat(out); err == nil && st.Size() > 0 {
+	if st, err := os.Stat(out); err == nil && st.Size() > 0 && out != a.savedPath {
 		dialog.ShowConfirm("Overwrite file?", filepath.Base(out)+" already exists.\nOverwrite it?",
 			func(ok bool) {
 				if ok {
@@ -709,7 +687,9 @@ func (a *App) build() fyne.CanvasObject {
 	a.pgmBtn.Importance = widget.HighImportance
 	a.tlInfo = widget.NewLabel("")
 	right := container.NewBorder(
-		container.NewHBox(bold("Timeline player"), a.pgmBtn, layout.NewSpacer(), a.tlInfo),
+		container.NewHBox(bold("Timeline player"), a.pgmBtn,
+			widget.NewButtonWithIcon("Split", theme.ContentCutIcon(), a.splitAtPlayhead),
+			layout.NewSpacer(), a.tlInfo),
 		container.NewVBox(a.pgmSlider, container.NewHBox(timeEntry(a.pgmPos), a.pgmTotal, layout.NewSpacer(),
 			widget.NewButton("|◀", func() { a.jumpCut(-1) }), pstep("−1s", -1), pstep("−.1", -0.1),
 			pstep("+.1", 0.1), pstep("+1s", 1), widget.NewButton("▶|", func() { a.jumpCut(1) }))),
@@ -732,7 +712,7 @@ func (a *App) build() fyne.CanvasObject {
 		widget.NewButton("−", func() { a.zoom(1 / 1.5) }),
 		widget.NewButton("+", func() { a.zoom(1.5) }),
 		widget.NewButton("Fit", a.fit),
-		widget.NewButton("Split at playhead", a.splitAtPlayhead),
+		widget.NewButtonWithIcon("Split at playhead", theme.ContentCutIcon(), a.splitAtPlayhead),
 		widget.NewButton("Remove", a.removeSel),
 		widget.NewButton("Clear all", a.clearAll),
 		a.muteV, a.muteA,
@@ -761,21 +741,19 @@ func (a *App) build() fyne.CanvasObject {
 	a.extra = widget.NewEntry()
 	a.extra.SetPlaceHolder("extra ffmpeg args")
 
-	rateRow := container.NewBorder(nil, nil, nil, a.rateUnit, a.rate)
-	forms := container.NewGridWithColumns(3,
+	rateRow := container.NewBorder(nil, nil, nil, container.NewHBox(a.rateUnit, a.twoPass), a.rate)
+	forms := container.NewGridWithColumns(2,
 		widget.NewForm(
 			widget.NewFormItem("Mode", a.mode),
 			widget.NewFormItem("Video codec", a.vcodec),
 			widget.NewFormItem("Encoder", a.encoder),
 			widget.NewFormItem("Rate control", a.rc),
-			widget.NewFormItem("Rate", rateRow)),
-		widget.NewForm(
+			widget.NewFormItem("Rate", rateRow),
 			widget.NewFormItem("Preset", a.preset),
-			widget.NewFormItem("Tune", a.tune),
+			widget.NewFormItem("Tune", a.tune)),
+		widget.NewForm(
 			widget.NewFormItem("Bit depth", a.bits),
 			widget.NewFormItem("GOP", a.gop),
-			widget.NewFormItem("Passes", a.twoPass)),
-		widget.NewForm(
 			widget.NewFormItem("Resolution", a.res),
 			widget.NewFormItem("Frame rate", a.fps),
 			widget.NewFormItem("Audio codec", a.acodec),
@@ -790,14 +768,16 @@ func (a *App) build() fyne.CanvasObject {
 	a.bar = widget.NewProgressBar()
 	a.status = widget.NewLabel("Ready")
 	exportPanel := container.NewVBox(
-		bold("Export"),
-		container.New(capLayout{max: 960}, forms), // do not stretch the controls over a 4K window
+		container.New(capLayout{max: 960}, forms),
 		container.NewBorder(nil, nil, widget.NewLabel("Save as"), container.NewHBox(browse, a.exportBtn), a.outPath),
 		container.NewBorder(nil, nil, nil, a.status, a.bar))
 
 	// ---- media library (lower left)
 	library := a.buildLibrary()
-	bottom := container.New(splitLayout{left: 0.38}, container.NewPadded(library), container.NewPadded(exportPanel))
+	// library and export are two cards of exactly the same size
+	bottom := container.New(splitLayout{left: 0.5},
+		container.NewPadded(widget.NewCard("Media library", "", library)),
+		container.NewPadded(widget.NewCard("Export", "", exportPanel)))
 
 	// callbacks that depend on every widget existing
 	a.mode.OnChanged = func(string) { a.refreshUI() }
@@ -905,43 +885,6 @@ func (a *App) insertMedia(m *Media, lane byte, idx int, off float64) {
 }
 
 // splitAtPlayhead cuts the clips under the playhead in two (razor).
-func (a *App) splitAtPlayhead() {
-	t := a.tpos
-	did := false
-	acc := 0.0
-	for i, c := range a.vclips {
-		d := c.dur()
-		if t > acc+0.05 && t < acc+d-0.05 {
-			cut := c.Start + (t - acc)
-			left, right := c, c
-			left.End = cut
-			right.Start = cut
-			a.vclips = append(a.vclips[:i], append([]Clip{left, right}, a.vclips[i+1:]...)...)
-			did = true
-			break
-		}
-		acc += d
-	}
-	for i := 0; i < len(a.aclips); i++ {
-		c := a.aclips[i]
-		if t > c.Offset+0.05 && t < c.Offset+c.dur()-0.05 {
-			cut := c.Start + (t - c.Offset)
-			left, right := c, c
-			left.End = cut
-			right.Start = cut
-			right.Offset = t
-			a.aclips = append(a.aclips[:i], append([]Clip{left, right}, a.aclips[i+1:]...)...)
-			i++ // skip the new right half
-			did = true
-		}
-	}
-	if !did {
-		a.showErr("Put the playhead on a clip first (click the ruler), then split.")
-		return
-	}
-	a.sel = nil
-	a.changed(false)
-}
 
 // ---- UI size ------------------------------------------------------------------
 // Fyne scales the interface from the system DPI setting. If that does not suit
@@ -1042,4 +985,88 @@ func (a *App) zoom(f float64) {
 	a.tl.fitMode = false
 	a.tl.pps = math.Min(400, math.Max(minPPS, a.tl.pps*f))
 	a.tl.update()
+}
+
+// ---- splitting ----------------------------------------------------------------
+
+// vclipStart is where video-lane clip i starts on the timeline (seconds).
+func (a *App) vclipStart(i int) float64 {
+	acc := 0.0
+	for k := 0; k < i && k < len(a.vclips); k++ {
+		acc += a.vclips[k].dur()
+	}
+	return acc
+}
+
+// splitVideo cuts video-lane clip i into two clips at timeline time t.
+// The right half becomes clip i+1. It reports false when t is not inside the clip.
+func (a *App) splitVideo(i int, t float64) bool {
+	if i < 0 || i >= len(a.vclips) {
+		return false
+	}
+	c := a.vclips[i]
+	start := a.vclipStart(i)
+	if !(t > start+0.05 && t < start+c.dur()-0.05) {
+		return false
+	}
+	cut := c.Start + (t - start)
+	left, right := c, c
+	left.End, right.Start = cut, cut
+	a.vclips = append(a.vclips[:i], append([]Clip{left, right}, a.vclips[i+1:]...)...)
+	return true
+}
+
+// splitAudio cuts audio-lane clip j into two clips at timeline time t.
+func (a *App) splitAudio(j int, t float64) bool {
+	if j < 0 || j >= len(a.aclips) {
+		return false
+	}
+	c := a.aclips[j]
+	if !(t > c.Offset+0.05 && t < c.Offset+c.dur()-0.05) {
+		return false
+	}
+	cut := c.Start + (t - c.Offset)
+	left, right := c, c
+	left.End, right.Start, right.Offset = cut, cut, t
+	a.aclips = append(a.aclips[:j], append([]Clip{left, right}, a.aclips[j+1:]...)...)
+	return true
+}
+
+// splitAtPlayhead cuts the clip at the playhead into two clips. If a clip is
+// selected and the playhead is inside it, only that clip is cut; otherwise every
+// clip under the playhead is cut (video lane and audio lane). The right half
+// gets selected.
+func (a *App) splitAtPlayhead() {
+	t := a.tpos
+	var next *selection
+	if s := a.sel; s != nil {
+		switch {
+		case s.lane == 'v' && a.splitVideo(s.i, t):
+			next = &selection{lane: 'v', i: s.i + 1}
+		case s.lane == 'a' && a.splitAudio(s.i, t):
+			next = &selection{lane: 'a', i: s.i + 1}
+		}
+	}
+	if next == nil {
+		for i := range a.vclips {
+			if a.splitVideo(i, t) {
+				next = &selection{lane: 'v', i: i + 1}
+				break
+			}
+		}
+		for j := 0; j < len(a.aclips); j++ {
+			if a.splitAudio(j, t) {
+				if next == nil {
+					next = &selection{lane: 'a', i: j + 1}
+				}
+				j++ // skip the new right half
+			}
+		}
+	}
+	if next == nil {
+		a.showErr("Move the playhead onto a clip first (click the ruler or the timeline), then split.")
+		return
+	}
+	a.sel = next
+	a.changed(false)
 }

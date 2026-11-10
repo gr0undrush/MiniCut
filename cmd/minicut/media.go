@@ -18,11 +18,9 @@ import (
 
 var ffmpegPath, ffprobePath, ffplayPath string
 
-// lookTool finds a tool in PATH, or next to the MiniCut executable.
+// lookTool finds a tool. A copy next to the MiniCut executable (the installer
+// puts ffmpeg there) is preferred; otherwise PATH is searched.
 func lookTool(name string) string {
-	if p, err := exec.LookPath(name); err == nil {
-		return p
-	}
 	if exe, err := os.Executable(); err == nil {
 		cand := filepath.Join(filepath.Dir(exe), name)
 		if runtime.GOOS == "windows" {
@@ -31,6 +29,9 @@ func lookTool(name string) string {
 		if st, err := os.Stat(cand); err == nil && !st.IsDir() {
 			return cand
 		}
+	}
+	if p, err := exec.LookPath(name); err == nil {
+		return p
 	}
 	return ""
 }

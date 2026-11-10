@@ -3,13 +3,11 @@ package main
 import (
 	"fmt"
 	"image/color"
-	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -96,10 +94,9 @@ func (a *App) buildLibrary() fyne.CanvasObject {
 		container.NewTabItemWithIcon("Audio", theme.FolderIcon(), aPanel))
 	a.refreshLibrary()
 
-	return container.NewBorder(
-		widget.NewLabelWithStyle("Media library", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabel("Drag items onto the timeline · double-click appends · drop files here from Explorer"),
-		nil, nil, a.libTabs)
+	hint := widget.NewLabel("Drag onto the timeline · double-click appends · drop files here")
+	hint.Truncation = fyne.TextTruncateEllipsis
+	return container.NewBorder(nil, hint, nil, nil, a.libTabs)
 }
 
 func (a *App) refreshLibrary() {
@@ -142,36 +139,18 @@ func (a *App) removeLib(kind byte) {
 	}
 }
 
-// pickOpen shows the file dialog and calls cb with the chosen path.
-func (a *App) pickOpen(cb func(string)) {
-	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
-		if err != nil {
-			dialog.ShowError(err, a.win)
-			return
-		}
-		if r == nil {
-			return
-		}
-		p := uriPath(r.URI())
-		r.Close()
-		a.rememberDir(filepath.Dir(p))
-		cb(p)
-	}, a.win)
-	d.SetFilter(storage.NewExtensionFileFilter(mediaExts))
-	a.setDialogDir(d)
-	d.Resize(fyne.NewSize(860, 580))
-	d.Show()
-}
 
 // importMedia asks for a file and puts it into the Video ('v') or Audio ('a') folder.
 func (a *App) importMedia(kind byte) {
-	a.pickOpen(func(p string) {
-		m, err := probeMedia(p)
-		if err != nil {
-			dialog.ShowError(err, a.win)
-			return
+	a.pickOpenMulti(func(paths []string) {
+		for _, p := range paths {
+			m, err := probeMedia(p)
+			if err != nil {
+				dialog.ShowError(err, a.win)
+				continue
+			}
+			a.addMedia(m, kind)
 		}
-		a.addMedia(m, kind)
 	})
 }
 

@@ -15,4 +15,5 @@ Thanks for helping! Bug reports, ideas and pull requests are welcome.
   can stop the whole process tree.
 - Describe what you tested (OS, GPU, ffmpeg version) in the pull request.
 
+The Windows installer is described in `installer/README.md`.
 See `docs/ARCHITECTURE.md` for how the code is organised.
